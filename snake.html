@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Yılan Oyunu</title>
+<style>
+  :root{
+    --bg:#1b1815;
+    --board:#232019;
+    --grid:#2c281f;
+    --snake:#6fbf73;
+    --snake-head:#8fe392;
+    --food:#e35d5d;
+    --ink:#f2ede4;
+    --ink-soft:#b7ab9c;
+    --accent:#e3a95d;
+  }
+
+  *{ box-sizing: border-box; }
+
+  body{
+    margin:0;
+    min-height:100vh;
+    background: var(--bg);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+    padding: 24px 16px;
+    font-family: system-ui, sans-serif;
+    color: var(--ink);
+    gap:14px;
+  }
+
+  h1{
+    margin:0;
+    font-size: clamp(22px, 6vw, 30px);
+    letter-spacing: 0.02em;
+  }
+
+  .hud{
+    display:flex;
+    gap:24px;
+    font-size:15px;
+    color: var(--ink-soft);
+  }
+
+  .hud b{ color: var(--accent); }
+
+  .board-wrap{
+    position:relative;
+    width:min(92vw, 420px);
+    aspect-ratio: 1 / 1;
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,.45);
+    background: var(--board);
+  }
+
+  canvas{
+    display:block;
+    width:100%;
+    height:100%;
+  }
+
+  .overlay{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:12px;
+    background: rgba(20,17,13,0.78);
+    text-align:center;
+    padding: 20px;
+  }
+
+  .overlay.hidden{ display:none; }
+
+  .overlay p{
+    margin:0;
+    color: var(--ink-soft);
+    font-size:14px;
+  }
+
+  button{
+    font: inherit;
+    font-weight:600;
+    padding: 10px 22px;
+    border-radius: 999px;
+    border: none;
+    background: var(--accent);
+    color: #241a0c;
+    cursor:pointer;
+  }
+
+  button:active{ transform: scale(0.97); }
+
+  .hint{
+    color: var(--ink-soft);
+    font-size:13px;
+    text-align:center;
+    max-width: 320px;
+  }
+
+  .pad{
+    display:grid;
+    grid-template-columns: repeat(3, 56px);
+    grid-template-rows: repeat(3, 56px);
+    gap:6px;
+    margin-top: 4px;
+  }
+
+  .pad button{
+    background: var(--board);
+    color: var(--ink);
+    border: 1px solid var(--grid);
+    font-size: 18px;
+    padding:0;
+  }
+
+  .pad .up{ grid-column:2; grid-row:1; }
+  .pad .left{ grid-column:1; grid-row:2; }
+  .pad .right{ grid-column:3; grid-row:2; }
+  .pad .down{ grid-column:2; grid-row:3; }
+
+  @media (min-width: 640px){
+    .pad{ display: none; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Yılan Oyunu</h1>
+
+<div class="hud">
+  <div>Skor: <b id="score">0</b></div>
+  <div>En Yüksek: <b id="best">0</b></div>
+</div>
+
+<div class="board-wrap">
+  <canvas id="board" width="420" height="420"></canvas>
+
+  <div class="overlay" id="overlay">
+    <p id="overlayMsg">Başlamak için bir tuşa bas veya ekrana dokun</p>
+    <button id="startBtn">Başla</button>
+  </div>
+</div>
+
+<p class="hint">Ok tuşları / WASD ile yönet. Duvara ya da kendine çarpma!</p>
+
+<div class="pad" aria-hidden="true">
+  <button class="up" data-dir="up">▲</button>
+  <button class="left" data-dir="left">◀</button>
+  <button class="right" data-dir="right">▶</button>
+  <button class="down" data-dir="down">▼</button>
+</div>
+
+<script>
+(function(){
+  var canvas = document.getElementById('board');
+  var ctx = canvas.getContext('2d');
+  var scoreEl = document.getElementById('score');
+  var bestEl = document.getElementById('best');
+  var overlay = document.getElementById('overlay');
+  var overlayMsg = document.getElementById('overlayMsg');
+  var startBtn = document.getElementById('startBtn');
+
+  var GRID = 21;
+  var CELL = canvas.width / GRID;
+
+  var snake, dir, nextDir, food, score, best, running, tickMs, timer;
+
+  function loadBest(){
+    try { return parseInt(localStorage.getItem('snakeBest') || '0', 10) || 0; }
+    catch(e){ return 0; }
+  }
+  function saveBest(v){
+    try { localStorage.setItem('snakeBest', String(v)); } catch(e){}
+  }
+
+  best = loadBest();
+  bestEl.textContent = best;
+
+  function reset(){
+    var mid = Math.floor(GRID / 2);
+    snake = [
+      {x: mid - 1, y: mid},
+      {x: mid - 2, y: mid},
+      {x: mid - 3, y: mid}
+    ];
+    dir = {x: 1, y: 0};
+    nextDir = dir;
+    score = 0;
+    tickMs = 130;
+    scoreEl.textContent = score;
+    placeFood();
+    draw();
+  }
+
+  function placeFood(){
+    var free = [];
+    for (var x = 0; x < GRID; x++){
+      for (var y = 0; y < GRID; y++){
+        var onSnake = snake.some(function(s){ return s.x === x && s.y === y; });
+        if (!onSnake) free.push({x:x, y:y});
+      }
+    }
+    food = free[Math.floor(Math.random() * free.length)];
+  }
+
+  function draw(){
+    ctx.fillStyle = '#232019';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = '#2c281f';
+    ctx.lineWidth = 1;
+    for (var i = 1; i < GRID; i++){
+      ctx.beginPath();
+      ctx.moveTo(i * CELL, 0);
+      ctx.lineTo(i * CELL, canvas.height);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, i * CELL);
+      ctx.lineTo(canvas.width, i * CELL);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#e35d5d';
+    roundRect(food.x * CELL + 3, food.y * CELL + 3, CELL - 6, CELL - 6, 6);
+    ctx.fill();
+
+    for (var s = 0; s < snake.length; s++){
+      ctx.fillStyle = s === 0 ? '#8fe392' : '#6fbf73';
+      var seg = snake[s];
+      roundRect(seg.x * CELL + 2, seg.y * CELL + 2, CELL - 4, CELL - 4, 5);
+      ctx.fill();
+    }
+  }
+
+  function roundRect(x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function step(){
+    dir = nextDir;
+    var head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+    if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID || hitsSelf(head)){
+      gameOver();
+      return;
+    }
+
+    snake.unshift(head);
+
+    if (head.x === food.x && head.y === food.y){
+      score++;
+      scoreEl.textContent = score;
+      if (tickMs > 60) tickMs -= 2;
+      placeFood();
+      restartTimer();
+    } else {
+      snake.pop();
+    }
+
+    draw();
+  }
+
+  function hitsSelf(head){
+    return snake.some(function(s){ return s.x === head.x && s.y === head.y; });
+  }
+
+  function gameOver(){
+    running = false;
+    clearInterval(timer);
+    if (score > best){
+      best = score;
+      saveBest(best);
+      bestEl.textContent = best;
+    }
+    overlayMsg.textContent = 'Oyun bitti! Skor: ' + score;
+    startBtn.textContent = 'Tekrar Oyna';
+    overlay.classList.remove('hidden');
+  }
+
+  function restartTimer(){
+    clearInterval(timer);
+    timer = setInterval(step, tickMs);
+  }
+
+  function startGame(){
+    reset();
+    running = true;
+    overlay.classList.add('hidden');
+    restartTimer();
+  }
+
+  function setDir(x, y){
+    if (!running) return;
+    if (dir.x === -x && dir.y === -y) return;
+    nextDir = {x: x, y: y};
+  }
+
+  document.addEventListener('keydown', function(e){
+    switch(e.key){
+      case 'ArrowUp': case 'w': case 'W': setDir(0, -1); e.preventDefault(); break;
+      case 'ArrowDown': case 's': case 'S': setDir(0, 1); e.preventDefault(); break;
+      case 'ArrowLeft': case 'a': case 'A': setDir(-1, 0); e.preventDefault(); break;
+      case 'ArrowRight': case 'd': case 'D': setDir(1, 0); e.preventDefault(); break;
+      case ' ':
+        if (!running) startGame();
+        e.preventDefault();
+        break;
+    }
+  });
+
+  startBtn.addEventListener('click', startGame);
+
+  document.querySelectorAll('.pad button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var map = {up:[0,-1], down:[0,1], left:[-1,0], right:[1,0]};
+      var d = map[btn.dataset.dir];
+      setDir(d[0], d[1]);
+    });
+  });
+
+  var touchStart = null;
+  canvas.addEventListener('touchstart', function(e){
+    var t = e.touches[0];
+    touchStart = {x: t.clientX, y: t.clientY};
+  }, {passive:true});
+
+  canvas.addEventListener('touchend', function(e){
+    if (!touchStart) return;
+    if (!running){ startGame(); touchStart = null; return; }
+    var t = e.changedTouches[0];
+    var dx = t.clientX - touchStart.x;
+    var dy = t.clientY - touchStart.y;
+    if (Math.abs(dx) > Math.abs(dy)){
+      setDir(dx > 0 ? 1 : -1, 0);
+    } else {
+      setDir(0, dy > 0 ? 1 : -1);
+    }
+    touchStart = null;
+  }, {passive:true});
+
+  reset();
+})();
+</script>
+</body>
+</html>
