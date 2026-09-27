@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ay Yıldız</title>
+<style>
+  :root{
+    --bg:#f2ede4;
+    --ink:#1b1815;
+    --ink-soft:#6b6259;
+    --card-shadow: 0 30px 70px rgba(30,20,10,.28);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#15110d;
+      --ink:#f2ede4;
+      --ink-soft:#b7ab9c;
+      --card-shadow: 0 30px 70px rgba(0,0,0,.55);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#15110d;
+    --ink:#f2ede4;
+    --ink-soft:#b7ab9c;
+    --card-shadow: 0 30px 70px rgba(0,0,0,.55);
+    color-scheme: dark;
+  }
+
+  *{ box-sizing: border-box; }
+
+  body{
+    margin:0;
+    background: var(--bg);
+    display:flex;
+    justify-content:center;
+    padding: 40px 16px;
+    font-family: system-ui, sans-serif;
+  }
+
+  .stage{
+    width:100%;
+    max-width: 460px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:18px;
+  }
+
+  .poster{
+    position:relative;
+    width:100%;
+    border-radius: 18px;
+    overflow:hidden;
+    box-shadow: var(--card-shadow);
+    background:#121f3d;
+  }
+
+  .poster svg{
+    display:block;
+    width:100%;
+    height:auto;
+  }
+
+  .caption{
+    position:absolute;
+    left: 6%;
+    bottom: 6%;
+    color:#f6ecd9;
+    text-shadow: 0 2px 10px rgba(0,0,0,.55);
+    pointer-events:none;
+  }
+
+  .caption .eyebrow{
+    font-family: "Oswald", "Arial Narrow", sans-serif;
+    font-weight: 600;
+    font-size: clamp(20px, 6vw, 30px);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  .caption .sub{
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-size: clamp(11px, 3vw, 13px);
+    color:#e7d9bf;
+    margin: 4px 0 0;
+    letter-spacing: 0.01em;
+  }
+
+  .credit{
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align:center;
+    max-width: 40ch;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .poster svg animate,
+    .poster svg animateTransform{
+      display:none;
+    }
+  }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&display=swap">
+</head>
+<body>
+
+<div class="stage">
+  <div class="poster">
+    <svg class="scene" viewBox="0 0 1000 1200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Bir Türk askerinin gün batımında Türk bayrağını dalgalandırdığı animasyonlu illüstrasyon">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"  stop-color="#101c37"/>
+          <stop offset="42%" stop-color="#6c3247"/>
+          <stop offset="72%" stop-color="#d9713f"/>
+          <stop offset="100%" stop-color="#f4b26a"/>
+        </linearGradient>
+
+        <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"  stop-color="#ffd699" stop-opacity="0.85"/>
+          <stop offset="55%" stop-color="#ffb066" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#ffb066" stop-opacity="0"/>
+        </radialGradient>
+
+        <linearGradient id="hillShade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1c1510"/>
+          <stop offset="100%" stop-color="#0e0b08"/>
+        </linearGradient>
+
+        <filter id="flagWave" x="-30%" y="-40%" width="160%" height="220%">
+          <feTurbulence type="fractalNoise" numOctaves="2" seed="7" result="noise">
+            <animate attributeName="baseFrequency" values="0.012 0.05;0.02 0.07;0.012 0.05" dur="2.8s" repeatCount="indefinite"/>
+          </feTurbulence>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="16" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+
+      <!-- sky -->
+      <rect width="1000" height="1200" fill="url(#sky)"/>
+
+      <!-- backlight glow -->
+      <circle cx="560" cy="860" r="430" fill="url(#glow)"/>
+
+      <!-- stars -->
+      <g fill="#f6ecd9" opacity="0.7">
+        <circle cx="120" cy="90" r="2.2"/>
+        <circle cx="210" cy="180" r="1.6"/>
+        <circle cx="80" cy="230" r="1.8"/>
+        <circle cx="300" cy="70" r="1.4"/>
+        <circle cx="860" cy="120" r="2"/>
+        <circle cx="920" cy="210" r="1.5"/>
+        <circle cx="760" cy="60" r="1.6"/>
+        <circle cx="180" cy="330" r="1.3"/>
+      </g>
+
+      <!-- distant hill -->
+      <path d="M0,980 C220,930 340,970 500,945 C660,920 780,955 1000,915 L1000,1200 L0,1200 Z" fill="#3a2a2a" opacity="0.5"/>
+
+      <!-- ground the soldier stands on -->
+      <path d="M0,1150 C160,1085 300,1125 460,1092 C610,1062 760,1100 1000,1060 L1000,1200 L0,1200 Z" fill="url(#hillShade)"/>
+
+      <!-- ===== soldier silhouette ===== -->
+      <g fill="#15130f">
+        <!-- back arm (relaxed, at side) -->
+        <path d="M328,528 Q302,582 308,624 L332,652 L347,630 Q337,576 352,528 Z"/>
+
+        <!-- legs -->
+        <path d="M349,682 L401,682 L394,978 L356,978 Z"/>
+        <path d="M347,976 L402,976 L410,1015 L338,1015 Z"/>
+        <path d="M406,684 L456,684 L472,958 L424,974 Z"/>
+        <path d="M417,956 L478,956 L490,998 L408,1008 Z"/>
+
+        <!-- torso / jacket -->
+        <path d="M311,516 L459,516 L444,600 L456,680 L346,680 L326,600 Z"/>
+
+        <!-- gear pack -->
+        <rect x="438" y="538" width="34" height="98" rx="10"/>
+
+        <!-- neck -->
+        <rect x="371" y="491" width="27" height="24"/>
+
+        <!-- head -->
+        <circle cx="385" cy="454" r="42"/>
+
+        <!-- helmet dome + brim -->
+        <path d="M341,450 Q385,392 429,450 L436,470 Q385,449 334,470 Z"/>
+        <path d="M337,464 Q385,452 433,464 L440,474 Q385,461 330,474 Z"/>
+
+        <!-- raised arm holding the pole -->
+        <path d="M449,524 Q518,498 566,398 L598,373 L583,353 Q529,458 424,543 Z"/>
+      </g>
+
+      <!-- ===== pole + flag, swung by the soldier's arm ===== -->
+      <g>
+        <animateTransform attributeName="transform" type="rotate"
+          values="-7 592 368; 8 592 368; -7 592 368"
+          dur="2.6s" keyTimes="0;0.5;1" repeatCount="indefinite"/>
+
+        <rect x="587" y="98" width="10" height="255" rx="4" fill="#4a3524"/>
+        <circle cx="592" cy="98" r="7" fill="#7a5a36"/>
+
+        <g transform="translate(592,96)" filter="url(#flagWave)">
+          <rect x="0" y="0" width="336" height="206" fill="#E30A17"/>
+          <circle cx="108" cy="103" r="57" fill="#ffffff"/>
+          <circle cx="136" cy="103" r="47" fill="#E30A17"/>
+          <path d="M226,69 L233.6,92.5 L258.3,92.5 L238.4,107 L246,130.5 L226,116 L206,130.5 L213.6,107 L193.7,92.5 L218.4,92.5 Z" fill="#ffffff"/>
+        </g>
+      </g>
+    </svg>
+
+    <div class="caption">
+      <p class="eyebrow">Ay Yıldız</p>
+      <p class="sub">Rüzgârda dalgalanan kızıl bayrak</p>
+    </div>
+  </div>
+
+  <p class="credit">Bir Türk askerinin gün batımında bayrağı gururla salladığı, tamamen CSS/SVG ile canlandırılmış bir poster illüstrasyonu.</p>
+</div>
+
+<script>
+  try {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      var svg = document.querySelector('svg.scene');
+      if (svg && typeof svg.pauseAnimations === 'function') svg.pauseAnimations();
+    }
+  } catch (e) {}
+</script>
+</body>
+</html>
