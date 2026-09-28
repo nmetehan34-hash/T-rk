@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aday Takip</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section id="ayarEksik" class="giris" hidden>
+  <div class="giris-kart">
+    <h1>Kurulum gerekli</h1>
+    <p>Uygulama henüz bir Supabase projesine bağlanmamış. <code>config.js</code> dosyasına Supabase proje adresini ve anahtarını yaz.</p>
+  </div>
+</section>
+
+<section id="giris" class="giris" hidden>
+  <form id="girisFormu" class="giris-kart">
+    <div>
+      <h1>Aday Takip</h1>
+      <p class="alt">Devam etmek için giriş yap</p>
+    </div>
+    <label>E-posta
+      <input type="email" name="email" required autocomplete="username">
+    </label>
+    <label>Şifre
+      <input type="password" name="sifre" required autocomplete="current-password">
+    </label>
+    <p class="hata" id="girisHata" hidden></p>
+    <button type="submit" class="btn birincil">Giriş Yap</button>
+  </form>
+</section>
+
+<div id="uygulama" hidden>
+  <header class="ust">
+    <a href="#/" class="logo">Aday Takip</a>
+    <div class="ust-sag">
+      <span id="kullaniciEmail"></span>
+      <button type="button" id="cikisBtn" class="btn">Çıkış</button>
+    </div>
+  </header>
+  <main id="icerik"></main>
+</div>
+
+<div id="bildirim" class="bildirim" role="status" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
