@@ -34,7 +34,13 @@
 
 <div id="uygulama" hidden>
   <header class="ust">
-    <a href="#/" class="logo">Aday Takip</a>
+    <div class="ust-sol">
+      <a href="#/" class="logo">Aday Takip</a>
+      <nav class="menu">
+        <a href="#/" data-menu="adaylar">Adaylar</a>
+        <a href="#/analiz" data-menu="analiz">Analiz</a>
+      </nav>
+    </div>
     <div class="ust-sag">
       <span id="kullaniciEmail"></span>
       <button type="button" id="cikisBtn" class="btn">Çıkış</button>
@@ -44,6 +50,7 @@
 </div>
 
 <div id="bildirim" class="bildirim" role="status" hidden></div>
+<div id="ipucu" class="grafik-ipucu" aria-hidden="true" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>

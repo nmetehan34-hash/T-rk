@@ -27,6 +27,7 @@
   const SEKMELER = [
     ['genel', 'Genel Bilgiler'],
     ['notlar', 'Görüşme Notları'],
+    ['ucret', 'Ücret'],
     ['cv', 'CV'],
     ['referanslar', 'Referans Görüşmeleri']
   ];
@@ -40,8 +41,12 @@
     kullaniciEmail: document.getElementById('kullaniciEmail'),
     cikisBtn: document.getElementById('cikisBtn'),
     icerik: document.getElementById('icerik'),
-    bildirim: document.getElementById('bildirim')
+    bildirim: document.getElementById('bildirim'),
+    ipucu: document.getElementById('ipucu')
   };
+  const EXCELJS_URL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+  const SAYFA_BOYUTU = 1000;
+  const MAKS_UCRET = 100000000;
 
   let sb = null;
   let kullanici = null;
@@ -49,6 +54,7 @@
   let adaylar = [];
   let cvUrl = null;
   const liste = { arama: '', departman: '', tur: '', durum: '', alan: 'gorusme_tarihi', yon: -1 };
+  const analiz = { departman: '', pozisyon: '', baslangic: '', bitis: '' };
 
   // ---------- yardımcılar ----------
 
@@ -78,6 +84,34 @@
     return t === '' ? null : t;
   }
 
+  const sayiBicimi = new Intl.NumberFormat('tr-TR');
+
+  function para(n) {
+    return n == null ? '—' : sayiBicimi.format(Math.round(n)) + ' ₺';
+  }
+
+  function paraOku(v) {
+    const rakamlar = String(v ?? '').split(',')[0].replace(/\D/g, '');
+    return rakamlar === '' ? null : Number(rakamlar);
+  }
+
+  function paraAlaniBicimle(input) {
+    const n = paraOku(input.value);
+    input.value = n == null ? '' : sayiBicimi.format(n);
+  }
+
+  async function tumunuGetir(tablo, kolonlar) {
+    let hepsi = [];
+    for (let bas = 0; ; bas += SAYFA_BOYUTU) {
+      const { data, error } = await sb.from(tablo).select(kolonlar)
+        .order('olusturma_tarihi', { ascending: false }).order('id')
+        .range(bas, bas + SAYFA_BOYUTU - 1);
+      if (error) return { data: null, error };
+      hepsi = hepsi.concat(data || []);
+      if (!data || data.length < SAYFA_BOYUTU) return { data: hepsi, error: null };
+    }
+  }
+
   function uzanti(ad) {
     const i = ad.lastIndexOf('.');
     return i === -1 ? '' : ad.slice(i + 1).toLowerCase();
@@ -86,7 +120,7 @@
   function secenekler(harita, secili, bosEtiket) {
     const bos = bosEtiket !== undefined ? `<option value="">${esc(bosEtiket)}</option>` : '';
     return bos + Object.entries(harita)
-      .map(([k, v]) => `<option value="${k}"${k === secili ? ' selected' : ''}>${esc(v)}</option>`)
+      .map(([k, v]) => `<option value="${esc(k)}"${k === secili ? ' selected' : ''}>${esc(v)}</option>`)
       .join('');
   }
 
@@ -117,6 +151,7 @@
   }
 
   function yeniGorunum(html) {
+    el.ipucu.hidden = true;
     if (cvUrl) {
       URL.revokeObjectURL(cvUrl);
       cvUrl = null;
@@ -158,6 +193,7 @@
     el.girisFormu.addEventListener('submit', girisYap);
     el.cikisBtn.addEventListener('click', () => sb.auth.signOut());
     window.addEventListener('hashchange', yonlendir);
+    window.addEventListener('scroll', () => { el.ipucu.hidden = true; }, { passive: true });
   }
 
   function oturumDegisti(oturum) {
@@ -199,7 +235,11 @@
   function yonlendir() {
     if (!kullanici) return;
     const yol = location.hash.replace(/^#/, '') || '/';
+    document.querySelectorAll('.menu a').forEach(a => {
+      a.classList.toggle('aktif', a.dataset.menu === (yol === '/analiz' ? 'analiz' : 'adaylar'));
+    });
     let m;
+    if (yol === '/analiz') return analizGoster();
     if (yol === '/') return listeGoster();
     if (yol === '/yeni') return formGoster(null);
     if ((m = yol.match(/^\/aday\/([\w-]+)\/duzenle$/))) return formGoster(m[1]);
@@ -211,9 +251,7 @@
 
   async function listeGoster() {
     const no = yeniGorunum('<p class="yukleniyor">Adaylar yükleniyor…</p>');
-    const { data, error } = await sb.from('adaylar')
-      .select('id, ad_soyad, pozisyon, departman, telefon, email, gorusme_tarihi, gorusme_turu, durum')
-      .order('gorusme_tarihi', { ascending: false, nullsFirst: false });
+    const { data, error } = await tumunuGetir('adaylar', 'id, ad_soyad, pozisyon, departman, telefon, email, gorusme_tarihi, gorusme_turu, durum');
     if (!guncelMi(no)) return;
     if (error) return hataGorunumu(error);
     adaylar = data || [];
@@ -224,7 +262,10 @@
     el.icerik.innerHTML = `
       <div class="sayfa-baslik">
         <h1>Adaylar <span class="sayi" id="adaySayisi"></span></h1>
-        <a href="#/yeni" class="btn birincil">+ Yeni Aday</a>
+        <div class="butonlar">
+          <button type="button" class="btn" id="excelBtn">Excel'e Aktar</button>
+          <a href="#/yeni" class="btn birincil">+ Yeni Aday</a>
+        </div>
       </div>
       <div class="arac-cubugu">
         <input type="search" id="arama" placeholder="İsim, pozisyon, telefon veya e-posta ara…" value="${esc(liste.arama)}" aria-label="Ara">
@@ -242,6 +283,7 @@
       </div>`;
 
     document.getElementById('arama').addEventListener('input', e => { liste.arama = e.target.value; tabloCiz(); });
+    document.getElementById('excelBtn').addEventListener('click', e => excelAktar(e.currentTarget));
     document.getElementById('departmanFiltre').addEventListener('change', e => { liste.departman = e.target.value; tabloCiz(); });
     document.getElementById('turFiltre').addEventListener('change', e => { liste.tur = e.target.value; tabloCiz(); });
     document.getElementById('durumFiltre').addEventListener('change', e => { liste.durum = e.target.value; tabloCiz(); });
@@ -359,6 +401,7 @@
     document.getElementById('panel-notlar').innerHTML = a.gorusme_notlari
       ? `<div class="not-metni">${esc(a.gorusme_notlari)}</div>`
       : `<p class="bos">Görüşme notu girilmemiş. <a href="#/aday/${esc(a.id)}/duzenle">Not ekle</a></p>`;
+    document.getElementById('panel-ucret').innerHTML = ucretPanel(a);
     referansPanel(a, refs, document.getElementById('panel-referanslar'));
 
     let cvYuklendi = false;
@@ -391,6 +434,31 @@
       ${satir('Kayıt Tarihi', zaman(a.olusturma_tarihi))}
       ${satir('Son Güncelleme', zaman(a.guncelleme_tarihi))}
     </dl>`;
+  }
+
+  function ucretPanel(a) {
+    const b = a.net_ucret_beklentisi;
+    const t = a.net_ucret_teklifi;
+    let fark = '—';
+    if (b != null && t != null) {
+      const f = t - b;
+      const yuzde = b > 0 ? ` (%${new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 }).format(Math.abs(f) / b * 100)})` : '';
+      fark = f === 0 ? 'Teklif, beklentiyle aynı'
+        : `Teklif, beklentinin ${para(Math.abs(f))} ${f > 0 ? 'üstünde' : 'altında'}${yuzde}`;
+    }
+    const kutu = (etiket, deger, alt) => `
+      <div class="ucret-kutu">
+        <div class="ucret-etiket">${etiket}</div>
+        <div class="ucret-deger">${deger}</div>
+        ${alt ? `<div class="ucret-alt">${alt}</div>` : ''}
+      </div>`;
+    const duzenle = `<a href="#/aday/${esc(a.id)}/duzenle">Düzenle</a> ekranından girebilirsin.`;
+    return `
+      <div class="ucret-izgara">
+        ${kutu('Net ücret beklentisi', b == null ? 'Girilmemiş' : para(b), b == null ? duzenle : 'Aylık, net')}
+        ${kutu('Net ücret teklifi', t == null ? 'Teklif verilmedi' : para(t), t == null ? duzenle : 'Aylık, net')}
+      </div>
+      ${b != null && t != null ? `<p class="ucret-fark">${esc(fark)}</p>` : ''}`;
   }
 
   async function cvPanel(a, kutu, no) {
@@ -524,7 +592,7 @@
     const no = yeniGorunum('<p class="yukleniyor">Yükleniyor…</p>');
     const [adayS, oneriS] = await Promise.all([
       id ? sb.from('adaylar').select('*').eq('id', id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-      sb.from('adaylar').select('departman, pozisyon')
+      tumunuGetir('adaylar', 'id, departman, pozisyon')
     ]);
     if (!guncelMi(no)) return;
     if (adayS.error) return hataGorunumu(adayS.error);
@@ -552,6 +620,13 @@
         </div>
         <label>Görüşme Notları<textarea name="gorusme_notlari" rows="8">${esc(d.gorusme_notlari)}</textarea></label>
         <fieldset>
+          <legend>Ücret (aylık, net, ₺)</legend>
+          <div class="izgara">
+            <label>Net ücret beklentisi<input name="net_ucret_beklentisi" class="para" inputmode="numeric" autocomplete="off" placeholder="ör. 45.000" value="${d.net_ucret_beklentisi == null ? '' : sayiBicimi.format(d.net_ucret_beklentisi)}"></label>
+            <label>Net ücret teklifi<input name="net_ucret_teklifi" class="para" inputmode="numeric" autocomplete="off" placeholder="Teklif verilmediyse boş bırak" value="${d.net_ucret_teklifi == null ? '' : sayiBicimi.format(d.net_ucret_teklifi)}"></label>
+          </div>
+        </fieldset>
+        <fieldset>
           <legend>CV (PDF veya Word .docx, en fazla ${MAKS_CV_MB} MB)</legend>
           ${a && a.cv_yolu ? `
             <p class="ipucu">Mevcut CV: <strong>${esc(a.cv_dosya_adi)}</strong></p>
@@ -569,6 +644,7 @@
 
     const f = document.getElementById('adayFormu');
     if (!a) f.ad_soyad.focus();
+    f.querySelectorAll('input.para').forEach(i => i.addEventListener('blur', () => paraAlaniBicimle(i)));
     f.addEventListener('submit', e => adayKaydet(e, a));
   }
 
@@ -604,9 +680,14 @@
       gorusme_tarihi: bosIseNull(f.gorusme_tarihi.value),
       gorusme_turu: f.gorusme_turu.value,
       durum: f.durum.value,
-      gorusme_notlari: bosIseNull(f.gorusme_notlari.value)
+      gorusme_notlari: bosIseNull(f.gorusme_notlari.value),
+      net_ucret_beklentisi: paraOku(f.net_ucret_beklentisi.value),
+      net_ucret_teklifi: paraOku(f.net_ucret_teklifi.value)
     };
     if (!veri.ad_soyad || !veri.pozisyon || !veri.departman) return bildir('Ad soyad, pozisyon ve departman zorunlu.', 'hata');
+    if ([veri.net_ucret_beklentisi, veri.net_ucret_teklifi].some(u => u != null && u > MAKS_UCRET)) {
+      return bildir('Ücret değeri çok yüksek görünüyor, lütfen kontrol et.', 'hata');
+    }
 
     const butonMetni = btn.textContent;
     btn.disabled = true;
@@ -656,6 +737,355 @@
       btn.disabled = false;
       btn.textContent = butonMetni;
     }
+  }
+
+  // ---------- Excel'e aktarma ----------
+
+  let excelJsSozu = null;
+  function excelJsYukle() {
+    if (window.ExcelJS) return Promise.resolve();
+    if (!excelJsSozu) {
+      excelJsSozu = new Promise((tamam, hata) => {
+        const s = document.createElement('script');
+        s.src = EXCELJS_URL;
+        s.onload = tamam;
+        s.onerror = () => {
+          excelJsSozu = null;
+          s.remove();
+          hata(new Error('Excel aracı yüklenemedi. İnternet bağlantını kontrol et.'));
+        };
+        document.head.appendChild(s);
+      });
+    }
+    return excelJsSozu;
+  }
+
+  // Excel tarihleri saat dilimi bilgisi taşımaz; yerel saati olduğu gibi göstermek için kaydırıyoruz.
+  function excelTarihi(d) {
+    return d ? new Date(`${String(d).slice(0, 10)}T00:00:00Z`) : null;
+  }
+  function excelZamani(ts) {
+    if (!ts) return null;
+    const t = new Date(ts);
+    return new Date(t.getTime() - t.getTimezoneOffset() * 60000);
+  }
+
+  function excelSayfasi(kitap, ad, kolonlar, satirlar) {
+    const sayfa = kitap.addWorksheet(ad, { views: [{ state: 'frozen', ySplit: 1 }] });
+    sayfa.columns = kolonlar.map(k => ({
+      header: k.baslik,
+      width: k.genislik,
+      style: k.bicim ? { numFmt: k.bicim } : k.uzun ? { alignment: { wrapText: true, vertical: 'top' } } : {}
+    }));
+    satirlar.forEach(s => sayfa.addRow(kolonlar.map(k => {
+      const v = k.deger(s);
+      return v === undefined || v === '' ? null : v;
+    })));
+    const baslik = sayfa.getRow(1);
+    baslik.font = { bold: true };
+    baslik.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE9EFFB' } };
+    baslik.alignment = { vertical: 'middle' };
+    sayfa.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: kolonlar.length } };
+  }
+
+  async function excelAktar(btn) {
+    const metin = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Hazırlanıyor…';
+    try {
+      const [, adayS, refS] = await Promise.all([
+        excelJsYukle(),
+        tumunuGetir('adaylar', '*'),
+        tumunuGetir('referans_gorusmeleri', '*')
+      ]);
+      if (adayS.error) throw adayS.error;
+      if (refS.error) throw refS.error;
+      const tumAdaylar = adayS.data.slice().sort((x, y) => String(y.gorusme_tarihi || '').localeCompare(String(x.gorusme_tarihi || '')));
+      const refler = refS.data;
+      const adayHaritasi = Object.fromEntries(tumAdaylar.map(a => [a.id, a]));
+      const refSayisi = {};
+      refler.forEach(r => { refSayisi[r.aday_id] = (refSayisi[r.aday_id] || 0) + 1; });
+
+      const kitap = new window.ExcelJS.Workbook();
+      kitap.creator = 'Aday Takip';
+      kitap.created = new Date();
+
+      excelSayfasi(kitap, 'Adaylar', [
+        { baslik: 'Ad Soyad', genislik: 24, deger: a => a.ad_soyad },
+        { baslik: 'Pozisyon', genislik: 24, deger: a => a.pozisyon },
+        { baslik: 'Departman', genislik: 18, deger: a => a.departman },
+        { baslik: 'Telefon', genislik: 16, deger: a => a.telefon },
+        { baslik: 'E-posta', genislik: 28, deger: a => a.email },
+        { baslik: 'Görüşme Tarihi', genislik: 15, deger: a => excelTarihi(a.gorusme_tarihi), bicim: 'dd.mm.yyyy' },
+        { baslik: 'Görüşme Türü', genislik: 14, deger: a => GORUSME_TURLERI[a.gorusme_turu] },
+        { baslik: 'Durum', genislik: 12, deger: a => DURUMLAR[a.durum] },
+        { baslik: 'Net Ücret Beklentisi (₺)', genislik: 18, deger: a => a.net_ucret_beklentisi, bicim: '#,##0' },
+        { baslik: 'Net Ücret Teklifi (₺)', genislik: 18, deger: a => a.net_ucret_teklifi, bicim: '#,##0' },
+        { baslik: 'Görüşme Notları', genislik: 60, deger: a => a.gorusme_notlari, uzun: true },
+        { baslik: 'CV Dosyası', genislik: 26, deger: a => a.cv_dosya_adi },
+        { baslik: 'Referans Sayısı', genislik: 10, deger: a => refSayisi[a.id] || 0 },
+        { baslik: 'Ekleyen', genislik: 26, deger: a => a.ekleyen_email },
+        { baslik: 'Kayıt Tarihi', genislik: 18, deger: a => excelZamani(a.olusturma_tarihi), bicim: 'dd.mm.yyyy hh:mm' }
+      ], tumAdaylar);
+
+      excelSayfasi(kitap, 'Referans Görüşmeleri', [
+        { baslik: 'Aday', genislik: 24, deger: r => (adayHaritasi[r.aday_id] || {}).ad_soyad },
+        { baslik: 'Adayın Pozisyonu', genislik: 24, deger: r => (adayHaritasi[r.aday_id] || {}).pozisyon },
+        { baslik: 'Referans Veren', genislik: 24, deger: r => r.referans_kisi },
+        { baslik: 'Şirket / Pozisyon', genislik: 26, deger: r => r.sirket_pozisyon },
+        { baslik: 'Telefon', genislik: 16, deger: r => r.telefon },
+        { baslik: 'Görüşme Tarihi', genislik: 15, deger: r => excelTarihi(r.gorusme_tarihi), bicim: 'dd.mm.yyyy' },
+        { baslik: 'Notlar', genislik: 60, deger: r => r.notlar, uzun: true },
+        { baslik: 'Ekleyen', genislik: 26, deger: r => r.ekleyen_email }
+      ], refler.filter(r => adayHaritasi[r.aday_id]));
+
+      const tampon = await kitap.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([tampon], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }));
+      const baglanti = document.createElement('a');
+      baglanti.href = url;
+      baglanti.download = `aday-takip-${bugun()}.xlsx`;
+      document.body.appendChild(baglanti);
+      baglanti.click();
+      baglanti.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      bildir(`${tumAdaylar.length} aday ve ${refler.length} referans görüşmesi Excel'e aktarıldı.`, 'basari');
+    } catch (err) {
+      bildir('Excel dosyası oluşturulamadı: ' + hataMetni(err), 'hata');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = metin;
+    }
+  }
+
+  // ---------- analiz ----------
+
+  function istatistik(sayilar) {
+    if (!sayilar.length) return null;
+    const s = sayilar.slice().sort((x, y) => x - y);
+    const orta = Math.floor(s.length / 2);
+    return {
+      n: s.length,
+      ort: s.reduce((t, x) => t + x, 0) / s.length,
+      medyan: s.length % 2 ? s[orta] : (s[orta - 1] + s[orta]) / 2,
+      min: s[0],
+      max: s[s.length - 1]
+    };
+  }
+
+  function yuzde(pay, payda) {
+    return new Intl.NumberFormat('tr-TR', { style: 'percent', maximumFractionDigits: 0 }).format(payda ? pay / payda : 0);
+  }
+
+  async function analizGoster() {
+    const no = yeniGorunum('<p class="yukleniyor">Veriler yükleniyor…</p>');
+    const { data, error } = await tumunuGetir('adaylar',
+      'id, departman, pozisyon, gorusme_tarihi, gorusme_turu, durum, net_ucret_beklentisi, net_ucret_teklifi');
+    if (!guncelMi(no)) return;
+    if (error) return hataGorunumu(error);
+    const tum = data || [];
+    const departmanlar = benzersiz(tum, 'departman');
+    if (analiz.departman && !departmanlar.includes(analiz.departman)) analiz.departman = '';
+
+    el.icerik.innerHTML = `
+      <div class="sayfa-baslik">
+        <div>
+          <h1>Analiz</h1>
+          <p class="sayfa-alt">Görüşmelerin, sonuçların ve ücret beklentilerinin özeti</p>
+        </div>
+      </div>
+      <div class="filtreler">
+        <label>Departman<select id="anDepartman">${secenekler(Object.fromEntries(departmanlar.map(d => [d, d])), analiz.departman, 'Tüm departmanlar')}</select></label>
+        <label>Pozisyon<select id="anPozisyon"></select></label>
+        <label>Görüşme tarihi (başlangıç)<input type="date" id="anBaslangic" value="${esc(analiz.baslangic)}"></label>
+        <label>Görüşme tarihi (bitiş)<input type="date" id="anBitis" value="${esc(analiz.bitis)}"></label>
+        <button type="button" class="btn" id="anTemizle">Filtreleri temizle</button>
+      </div>
+      <div id="analizSonuc"></div>`;
+
+    const depSec = document.getElementById('anDepartman');
+    const pozSec = document.getElementById('anPozisyon');
+    const basGir = document.getElementById('anBaslangic');
+    const bitGir = document.getElementById('anBitis');
+    const sonuc = document.getElementById('analizSonuc');
+
+    const pozisyonlariDoldur = () => {
+      const kapsam = analiz.departman ? tum.filter(a => a.departman === analiz.departman) : tum;
+      const pozlar = benzersiz(kapsam, 'pozisyon');
+      if (analiz.pozisyon && !pozlar.includes(analiz.pozisyon)) analiz.pozisyon = '';
+      pozSec.innerHTML = secenekler(Object.fromEntries(pozlar.map(p => [p, p])), analiz.pozisyon, 'Tüm pozisyonlar');
+    };
+    const ciz = () => {
+      el.ipucu.hidden = true;
+      analizCiz(sonuc, tum.filter(a =>
+        (!analiz.departman || a.departman === analiz.departman) &&
+        (!analiz.pozisyon || a.pozisyon === analiz.pozisyon) &&
+        (!analiz.baslangic || (a.gorusme_tarihi && a.gorusme_tarihi >= analiz.baslangic)) &&
+        (!analiz.bitis || (a.gorusme_tarihi && a.gorusme_tarihi <= analiz.bitis))
+      ), tum.length);
+    };
+
+    depSec.addEventListener('change', () => { analiz.departman = depSec.value; pozisyonlariDoldur(); ciz(); });
+    pozSec.addEventListener('change', () => { analiz.pozisyon = pozSec.value; ciz(); });
+    basGir.addEventListener('change', () => { analiz.baslangic = basGir.value; ciz(); });
+    bitGir.addEventListener('change', () => { analiz.bitis = bitGir.value; ciz(); });
+    document.getElementById('anTemizle').addEventListener('click', () => {
+      Object.assign(analiz, { departman: '', pozisyon: '', baslangic: '', bitis: '' });
+      depSec.value = '';
+      basGir.value = '';
+      bitGir.value = '';
+      pozisyonlariDoldur();
+      ciz();
+    });
+    ipucuBagla(sonuc);
+    pozisyonlariDoldur();
+    ciz();
+  }
+
+  function analizCiz(kutu, kayitlar, toplam) {
+    if (!kayitlar.length) {
+      kutu.innerHTML = `<div class="kart"><p class="bos">${
+        toplam ? 'Bu filtrelere uyan aday yok.' : 'Henüz aday eklenmemiş.'
+      }</p></div>`;
+      return;
+    }
+    const beklenti = istatistik(kayitlar.map(a => a.net_ucret_beklentisi).filter(v => v != null));
+    const teklif = istatistik(kayitlar.map(a => a.net_ucret_teklifi).filter(v => v != null));
+    const iseAlinan = kayitlar.filter(a => a.durum === 'ise_alindi').length;
+
+    const kpi = (etiket, deger, alt) => `
+      <div class="kpi">
+        <div class="kpi-etiket">${etiket}</div>
+        <div class="kpi-deger">${deger}</div>
+        <div class="kpi-alt">${alt}</div>
+      </div>`;
+
+    const gruplar = new Map();
+    kayitlar.forEach(a => {
+      const anahtar = `${a.departman || ''}\u0000${a.pozisyon || ''}`;
+      if (!gruplar.has(anahtar)) gruplar.set(anahtar, { departman: a.departman, pozisyon: a.pozisyon, kayitlar: [] });
+      gruplar.get(anahtar).kayitlar.push(a);
+    });
+    const grupOzeti = [...gruplar.values()].map(g => ({
+      ...g,
+      beklenti: istatistik(g.kayitlar.map(a => a.net_ucret_beklentisi).filter(v => v != null)),
+      teklif: istatistik(g.kayitlar.map(a => a.net_ucret_teklifi).filter(v => v != null)),
+      iseAlinan: g.kayitlar.filter(a => a.durum === 'ise_alindi').length
+    }));
+    const tekDepartman = new Set(kayitlar.map(a => a.departman)).size === 1;
+    const grupAdi = g => tekDepartman ? (g.pozisyon || '—') : `${g.pozisyon || '—'} · ${g.departman || '—'}`;
+
+    const beklentiSatirlari = grupOzeti.filter(g => g.beklenti)
+      .sort((x, y) => y.beklenti.ort - x.beklenti.ort)
+      .map(g => ({
+        etiket: grupAdi(g),
+        deger: g.beklenti.ort,
+        degerMetni: para(g.beklenti.ort),
+        ipucu: `${grupAdi(g)}\nOrtalama: ${para(g.beklenti.ort)} · Medyan: ${para(g.beklenti.medyan)}\n` +
+          `Aralık: ${para(g.beklenti.min)} – ${para(g.beklenti.max)}\n${g.beklenti.n} adayın beklentisi`
+      }));
+
+    const sayimSatirlari = (harita, alan) => Object.entries(harita).map(([k, ad]) => {
+      const n = kayitlar.filter(a => a[alan] === k).length;
+      return { etiket: ad, deger: n, degerMetni: sayiBicimi.format(n), ipucu: `${ad}: ${n} aday (${yuzde(n, kayitlar.length)})` };
+    });
+
+    const tabloSatirlari = grupOzeti.slice().sort((x, y) =>
+      String(x.departman || '').localeCompare(String(y.departman || ''), 'tr') ||
+      String(x.pozisyon || '').localeCompare(String(y.pozisyon || ''), 'tr'));
+
+    kutu.innerHTML = `
+      <div class="kpi-satiri">
+        ${kpi('Görüşülen aday', sayiBicimi.format(kayitlar.length),
+              `${beklenti ? beklenti.n : 0} adayın ücret beklentisi girilmiş`)}
+        ${kpi('Ortalama net ücret beklentisi', beklenti ? para(beklenti.ort) : '—',
+              beklenti ? `Medyan ${para(beklenti.medyan)}` : 'Ücret beklentisi girilmemiş')}
+        ${kpi('Beklenti aralığı', beklenti ? `${para(beklenti.min)} – ${para(beklenti.max)}` : '—',
+              beklenti ? 'En düşük – en yüksek' : 'Ücret beklentisi girilmemiş')}
+        ${kpi('Ortalama net teklif', teklif ? para(teklif.ort) : '—',
+              teklif ? `${teklif.n} teklif üzerinden` : 'Teklif verilmemiş')}
+        ${kpi('İşe alınan', sayiBicimi.format(iseAlinan), `İşe alım oranı ${yuzde(iseAlinan, kayitlar.length)}`)}
+      </div>
+      ${cubukGrafik('Pozisyona göre ortalama net ücret beklentisi', 'Aylık, net. Ayrıntı için çubuğun üzerine gel.', beklentiSatirlari)}
+      <div class="grafik-ikili">
+        ${cubukGrafik('Duruma göre aday sayısı', '', sayimSatirlari(DURUMLAR, 'durum'))}
+        ${cubukGrafik('Görüşme türüne göre aday sayısı', '', sayimSatirlari(GORUSME_TURLERI, 'gorusme_turu'))}
+      </div>
+      <section class="kart">
+        <h2>Departman ve pozisyon bazında</h2>
+        <div class="tablo-kutu gomulu">
+          <table class="tablo ozet-tablo">
+            <thead><tr>
+              <th>Departman</th><th>Pozisyon</th><th class="sayi-hucre">Aday</th>
+              <th class="sayi-hucre">Ort. beklenti</th><th class="sayi-hucre">Medyan</th>
+              <th class="sayi-hucre">En düşük</th><th class="sayi-hucre">En yüksek</th>
+              <th class="sayi-hucre">Ort. teklif</th><th class="sayi-hucre">İşe alınan</th>
+            </tr></thead>
+            <tbody>${tabloSatirlari.map(g => `
+              <tr>
+                <td>${esc(g.departman || '—')}</td>
+                <td>${esc(g.pozisyon || '—')}</td>
+                <td class="sayi-hucre">${g.kayitlar.length}</td>
+                <td class="sayi-hucre">${g.beklenti ? para(g.beklenti.ort) : '—'}</td>
+                <td class="sayi-hucre">${g.beklenti ? para(g.beklenti.medyan) : '—'}</td>
+                <td class="sayi-hucre">${g.beklenti ? para(g.beklenti.min) : '—'}</td>
+                <td class="sayi-hucre">${g.beklenti ? para(g.beklenti.max) : '—'}</td>
+                <td class="sayi-hucre">${g.teklif ? para(g.teklif.ort) : '—'}</td>
+                <td class="sayi-hucre">${g.iseAlinan}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </section>`;
+  }
+
+  function cubukGrafik(baslik, alt, satirlar) {
+    const enBuyuk = Math.max(0, ...satirlar.map(s => s.deger));
+    const govde = satirlar.length ? `
+      <div class="cubuklar">
+        ${satirlar.map(s => {
+          const oran = enBuyuk ? s.deger / enBuyuk : 0;
+          const genislik = s.deger > 0 ? `max(2px, calc((100% - 104px) * ${oran.toFixed(4)}))` : '0px';
+          return `
+          <div class="cubuk-satir" tabindex="0" data-ipucu="${esc(s.ipucu)}" aria-label="${esc(s.ipucu)}">
+            <span class="cubuk-etiket" title="${esc(s.etiket)}">${esc(s.etiket)}</span>
+            <span class="cubuk-iz">
+              <span class="cubuk" style="width:${genislik}"></span>
+              <span class="cubuk-deger">${esc(s.degerMetni)}</span>
+            </span>
+          </div>`;
+        }).join('')}
+      </div>` : '<p class="bos">Bu seçimde ücret beklentisi girilmiş aday yok.</p>';
+    return `
+      <section class="kart grafik">
+        <h2>${esc(baslik)}</h2>
+        ${alt ? `<p class="grafik-alt">${esc(alt)}</p>` : ''}
+        ${govde}
+      </section>`;
+  }
+
+  function ipucuBagla(kok) {
+    const goster = (hedef, x, y) => {
+      el.ipucu.textContent = hedef.dataset.ipucu;
+      el.ipucu.hidden = false;
+      const r = el.ipucu.getBoundingClientRect();
+      el.ipucu.style.left = Math.min(Math.max(8, x + 14), window.innerWidth - r.width - 8) + 'px';
+      el.ipucu.style.top = (y - r.height - 12 < 8 ? y + 18 : y - r.height - 12) + 'px';
+    };
+    kok.addEventListener('mousemove', e => {
+      const h = e.target.closest('[data-ipucu]');
+      if (h) goster(h, e.clientX, e.clientY);
+      else el.ipucu.hidden = true;
+    });
+    kok.addEventListener('mouseleave', () => { el.ipucu.hidden = true; });
+    kok.addEventListener('focusin', e => {
+      const h = e.target.closest('[data-ipucu]');
+      if (!h) return;
+      const r = (h.querySelector('.cubuk') || h).getBoundingClientRect();
+      goster(h, r.right, r.top);
+    });
+    kok.addEventListener('focusout', () => { el.ipucu.hidden = true; });
   }
 
   baslat();

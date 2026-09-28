@@ -14,7 +14,9 @@ create table if not exists public.adaylar (
   gorusme_tarihi    date,
   gorusme_turu      text check (gorusme_turu in ('yuz_yuze', 'online', 'telefon')),
   gorusme_notlari   text,
-  durum             text not null default 'beklemede'
+  net_ucret_beklentisi integer check (net_ucret_beklentisi >= 0),
+  net_ucret_teklifi    integer check (net_ucret_teklifi >= 0),
+  durum            text not null default 'beklemede'
                     check (durum in ('beklemede', 'olumlu', 'olumsuz', 'ise_alindi')),
   cv_yolu           text,
   cv_dosya_adi      text,
@@ -39,6 +41,8 @@ create table if not exists public.referans_gorusmeleri (
 
 alter table public.adaylar add column if not exists departman text;
 alter table public.adaylar add column if not exists pozisyon text;
+alter table public.adaylar add column if not exists net_ucret_beklentisi integer check (net_ucret_beklentisi >= 0);
+alter table public.adaylar add column if not exists net_ucret_teklifi integer check (net_ucret_teklifi >= 0);
 
 create index if not exists referans_gorusmeleri_aday_id_idx on public.referans_gorusmeleri (aday_id);
 create index if not exists adaylar_gorusme_tarihi_idx on public.adaylar (gorusme_tarihi desc);

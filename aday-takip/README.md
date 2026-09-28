@@ -33,6 +33,9 @@ değerlerini `web/config.js` dosyasına yaz. `service_role` / `secret` anahtarı
 4. Verilen adresi (ör. `https://aday-takip-xyz.netlify.app`) ekibinle paylaş.
 
 ## Notlar
+- **Excel'e Aktar** (aday listesinin üstünde) tüm adayları ve referans görüşmelerini iki sayfalık bir `.xlsx` dosyasına indirir.
+- **Analiz** ekranı departman, pozisyon ve tarih aralığına göre aday sayılarını, ücret beklentisi ortalama/medyan/aralığını, teklifleri ve işe alım oranını gösterir.
+- Ücretler aylık net TL olarak, tam sayı şeklinde tutulur.
 - Tüm kullanıcılar tüm adayları görür ve düzenleyebilir. Her kayıtta ekleyen kişinin e-postası tutulur.
 - CV'ler gizli bir klasörde durur, sadece giriş yapmış kullanıcılar açabilir. PDF'ler sayfada önizlenir, Word dosyaları indirilir.
 - Aday bilgileri kişisel veri sayılır (KVKK). Ekip dışına erişim vermemeye ve ayrılan çalışanların hesabını silmeye dikkat et.
