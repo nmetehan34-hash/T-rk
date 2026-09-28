@@ -9,6 +9,8 @@ create table if not exists public.adaylar (
   ad_soyad          text not null check (length(trim(ad_soyad)) > 0),
   telefon           text,
   email             text,
+  departman         text,
+  pozisyon          text,
   gorusme_tarihi    date,
   gorusme_turu      text check (gorusme_turu in ('yuz_yuze', 'online', 'telefon')),
   gorusme_notlari   text,
@@ -34,6 +36,9 @@ create table if not exists public.referans_gorusmeleri (
   ekleyen_email    text default (auth.jwt() ->> 'email'),
   olusturma_tarihi timestamptz not null default now()
 );
+
+alter table public.adaylar add column if not exists departman text;
+alter table public.adaylar add column if not exists pozisyon text;
 
 create index if not exists referans_gorusmeleri_aday_id_idx on public.referans_gorusmeleri (aday_id);
 create index if not exists adaylar_gorusme_tarihi_idx on public.adaylar (gorusme_tarihi desc);

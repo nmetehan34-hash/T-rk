@@ -17,8 +17,9 @@
   };
   const KOLONLAR = [
     ['ad_soyad', 'Ad Soyad'],
+    ['pozisyon', 'Pozisyon'],
+    ['departman', 'Departman'],
     ['telefon', 'Telefon'],
-    ['email', 'E-posta'],
     ['gorusme_tarihi', 'Görüşme Tarihi'],
     ['gorusme_turu', 'Görüşme Türü'],
     ['durum', 'Durum']
@@ -47,7 +48,7 @@
   let gorunumNo = 0;
   let adaylar = [];
   let cvUrl = null;
-  const liste = { arama: '', tur: '', durum: '', alan: 'gorusme_tarihi', yon: -1 };
+  const liste = { arama: '', departman: '', tur: '', durum: '', alan: 'gorusme_tarihi', yon: -1 };
 
   // ---------- yardımcılar ----------
 
@@ -87,6 +88,10 @@
     return bos + Object.entries(harita)
       .map(([k, v]) => `<option value="${k}"${k === secili ? ' selected' : ''}>${esc(v)}</option>`)
       .join('');
+  }
+
+  function benzersiz(kayitlar, alan) {
+    return [...new Set(kayitlar.map(k => k[alan]).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'tr'));
   }
 
   function durumRozeti(d) {
@@ -207,11 +212,14 @@
   async function listeGoster() {
     const no = yeniGorunum('<p class="yukleniyor">Adaylar yükleniyor…</p>');
     const { data, error } = await sb.from('adaylar')
-      .select('id, ad_soyad, telefon, email, gorusme_tarihi, gorusme_turu, durum')
+      .select('id, ad_soyad, pozisyon, departman, telefon, email, gorusme_tarihi, gorusme_turu, durum')
       .order('gorusme_tarihi', { ascending: false, nullsFirst: false });
     if (!guncelMi(no)) return;
     if (error) return hataGorunumu(error);
     adaylar = data || [];
+    const departmanlar = benzersiz(adaylar, 'departman');
+    if (liste.departman && !departmanlar.includes(liste.departman)) liste.departman = '';
+    const departmanSecenekleri = Object.fromEntries(departmanlar.map(d => [d, d]));
 
     el.icerik.innerHTML = `
       <div class="sayfa-baslik">
@@ -219,7 +227,8 @@
         <a href="#/yeni" class="btn birincil">+ Yeni Aday</a>
       </div>
       <div class="arac-cubugu">
-        <input type="search" id="arama" placeholder="İsim, telefon veya e-posta ara…" value="${esc(liste.arama)}" aria-label="Ara">
+        <input type="search" id="arama" placeholder="İsim, pozisyon, telefon veya e-posta ara…" value="${esc(liste.arama)}" aria-label="Ara">
+        <select id="departmanFiltre" aria-label="Departman">${secenekler(departmanSecenekleri, liste.departman, 'Tüm departmanlar')}</select>
         <select id="turFiltre" aria-label="Görüşme türü">${secenekler(GORUSME_TURLERI, liste.tur, 'Tüm görüşme türleri')}</select>
         <select id="durumFiltre" aria-label="Durum">${secenekler(DURUMLAR, liste.durum, 'Tüm durumlar')}</select>
       </div>
@@ -233,6 +242,7 @@
       </div>`;
 
     document.getElementById('arama').addEventListener('input', e => { liste.arama = e.target.value; tabloCiz(); });
+    document.getElementById('departmanFiltre').addEventListener('change', e => { liste.departman = e.target.value; tabloCiz(); });
     document.getElementById('turFiltre').addEventListener('change', e => { liste.tur = e.target.value; tabloCiz(); });
     document.getElementById('durumFiltre').addEventListener('change', e => { liste.durum = e.target.value; tabloCiz(); });
     el.icerik.querySelectorAll('.sirala').forEach(b => b.addEventListener('click', () => {
@@ -250,7 +260,7 @@
 
   function eslesir(a, q, qRakam) {
     if (!q) return true;
-    if ([a.ad_soyad, a.email, a.telefon].some(v => v && v.toLocaleLowerCase('tr').includes(q))) return true;
+    if ([a.ad_soyad, a.pozisyon, a.departman, a.email, a.telefon].some(v => v && v.toLocaleLowerCase('tr').includes(q))) return true;
     return qRakam.length >= 3 && Boolean(a.telefon) && a.telefon.replace(/\D/g, '').includes(qRakam);
   }
 
@@ -269,7 +279,8 @@
     const q = liste.arama.trim().toLocaleLowerCase('tr');
     const qRakam = q.replace(/\D/g, '');
     const satirlar = adaylar
-      .filter(a => (!liste.tur || a.gorusme_turu === liste.tur) &&
+      .filter(a => (!liste.departman || a.departman === liste.departman) &&
+                   (!liste.tur || a.gorusme_turu === liste.tur) &&
                    (!liste.durum || a.durum === liste.durum) &&
                    eslesir(a, q, qRakam))
       .sort(karsilastir);
@@ -293,8 +304,9 @@
     govde.innerHTML = satirlar.map(a => `
       <tr data-id="${esc(a.id)}">
         <td><a href="#/aday/${esc(a.id)}" class="aday-ad">${esc(a.ad_soyad)}</a></td>
+        <td>${esc(a.pozisyon || '—')}</td>
+        <td>${esc(a.departman || '—')}</td>
         <td>${esc(a.telefon || '—')}</td>
-        <td>${esc(a.email || '—')}</td>
         <td>${tarih(a.gorusme_tarihi)}</td>
         <td>${esc(GORUSME_TURLERI[a.gorusme_turu] || '—')}</td>
         <td>${durumRozeti(a.durum)}</td>
@@ -319,6 +331,7 @@
     const refs = refS.data || [];
 
     const altBilgi = [
+      [a.pozisyon, a.departman].filter(Boolean).join(', '),
       a.gorusme_turu ? `${GORUSME_TURLERI[a.gorusme_turu]} görüşme` : '',
       a.gorusme_tarihi ? tarih(a.gorusme_tarihi) : ''
     ].filter(Boolean).join(' · ');
@@ -366,6 +379,8 @@
     const satir = (etiket, deger) => `<div class="alan"><dt>${etiket}</dt><dd>${deger}</dd></div>`;
     return `<dl class="bilgi-listesi">
       ${satir('Ad Soyad', esc(a.ad_soyad))}
+      ${satir('Pozisyon', esc(a.pozisyon || '—'))}
+      ${satir('Departman', esc(a.departman || '—'))}
       ${satir('Telefon', a.telefon ? `<a href="tel:${esc(a.telefon.replace(/[^\d+]/g, ''))}">${esc(a.telefon)}</a>` : '—')}
       ${satir('E-posta', a.email ? `<a href="mailto:${esc(a.email)}">${esc(a.email)}</a>` : '—')}
       ${satir('Görüşme Tarihi', tarih(a.gorusme_tarihi))}
@@ -507,14 +522,17 @@
 
   async function formGoster(id) {
     const no = yeniGorunum('<p class="yukleniyor">Yükleniyor…</p>');
-    let a = null;
-    if (id) {
-      const { data, error } = await sb.from('adaylar').select('*').eq('id', id).maybeSingle();
-      if (!guncelMi(no)) return;
-      if (error) return hataGorunumu(error);
-      if (!data) return bulunamadi();
-      a = data;
-    }
+    const [adayS, oneriS] = await Promise.all([
+      id ? sb.from('adaylar').select('*').eq('id', id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      sb.from('adaylar').select('departman, pozisyon')
+    ]);
+    if (!guncelMi(no)) return;
+    if (adayS.error) return hataGorunumu(adayS.error);
+    if (id && !adayS.data) return bulunamadi();
+    const a = adayS.data;
+    const oneriler = oneriS.data || [];
+    const oneriListesi = (listeId, alan) =>
+      `<datalist id="${listeId}">${benzersiz(oneriler, alan).map(v => `<option value="${esc(v)}">`).join('')}</datalist>`;
     const d = a || {};
     const geriLink = a ? `#/aday/${esc(a.id)}` : '#/';
 
@@ -524,6 +542,8 @@
       <form id="adayFormu" class="kart form">
         <div class="izgara">
           <label>Ad Soyad *<input name="ad_soyad" required maxlength="150" value="${esc(d.ad_soyad)}"></label>
+          <label>Pozisyon *<input name="pozisyon" required maxlength="150" list="pozisyonOnerileri" autocomplete="off" placeholder="ör. Muhasebe Uzmanı" value="${esc(d.pozisyon)}"></label>
+          <label>Departman *<input name="departman" required maxlength="150" list="departmanOnerileri" autocomplete="off" placeholder="ör. Finans" value="${esc(d.departman)}"></label>
           <label>Telefon<input name="telefon" type="tel" maxlength="40" value="${esc(d.telefon)}"></label>
           <label>E-posta<input name="email" type="email" maxlength="200" value="${esc(d.email)}"></label>
           <label>Görüşme Tarihi *<input name="gorusme_tarihi" type="date" required value="${esc(a ? d.gorusme_tarihi : bugun())}"></label>
@@ -543,6 +563,8 @@
           <button type="submit" class="btn birincil">${a ? 'Değişiklikleri Kaydet' : 'Adayı Kaydet'}</button>
           <a href="${geriLink}" class="btn">Vazgeç</a>
         </div>
+        ${oneriListesi('pozisyonOnerileri', 'pozisyon')}
+        ${oneriListesi('departmanOnerileri', 'departman')}
       </form>`;
 
     const f = document.getElementById('adayFormu');
@@ -575,6 +597,8 @@
     }
     const veri = {
       ad_soyad: f.ad_soyad.value.trim(),
+      pozisyon: bosIseNull(f.pozisyon.value),
+      departman: bosIseNull(f.departman.value),
       telefon: bosIseNull(f.telefon.value),
       email: bosIseNull(f.email.value),
       gorusme_tarihi: bosIseNull(f.gorusme_tarihi.value),
@@ -582,7 +606,7 @@
       durum: f.durum.value,
       gorusme_notlari: bosIseNull(f.gorusme_notlari.value)
     };
-    if (!veri.ad_soyad) return bildir('Ad soyad zorunlu.', 'hata');
+    if (!veri.ad_soyad || !veri.pozisyon || !veri.departman) return bildir('Ad soyad, pozisyon ve departman zorunlu.', 'hata');
 
     const butonMetni = btn.textContent;
     btn.disabled = true;
