@@ -17,7 +17,7 @@ Yüz yüze, online ya da telefonla görüşülen adayları; CV'leri, görüşme 
 **Authentication > Sign In / Providers** bölümünde **Allow new users to sign up** seçeneğini kapat. Böylece siteyi bulan biri kendine hesap açamaz; kullanıcıları sadece sen eklersin.
 
 ### 3. Kullanıcıları ekle
-**Authentication > Users > Add user > Create new user**: e-posta ve şifre gir, **Auto Confirm User** işaretli olsun. Her ekip üyesi için tekrarla. Şifre sıfırlamak için de aynı ekranı kullanabilirsin.
+**Authentication > Users > Add user > Create new user**: e-posta ve şifre gir, **Auto Confirm User** işaretli olsun. Her ekip üyesi için tekrarla. Verdiğin şifre geçici olabilir: herkes giriş yaptıktan sonra sağ üstteki **Şifre Değiştir** ile kendi şifresini belirleyebilir (en az 8 karakter).
 
 ### 4. Uygulamayı projeye bağla
 **Project Settings > API** (ya da üstteki **Connect** butonu) ekranından:

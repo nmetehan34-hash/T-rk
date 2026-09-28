@@ -235,11 +235,12 @@
   function yonlendir() {
     if (!kullanici) return;
     const yol = location.hash.replace(/^#/, '') || '/';
-    document.querySelectorAll('.menu a').forEach(a => {
-      a.classList.toggle('aktif', a.dataset.menu === (yol === '/analiz' ? 'analiz' : 'adaylar'));
-    });
+    const menu = yol === '/analiz' ? 'analiz' : yol === '/sifre' ? 'sifre' : 'adaylar';
+    document.querySelectorAll('.menu a').forEach(a => a.classList.toggle('aktif', a.dataset.menu === menu));
+    document.getElementById('sifreBtn').classList.toggle('aktif', menu === 'sifre');
     let m;
     if (yol === '/analiz') return analizGoster();
+    if (yol === '/sifre') return sifreGoster();
     if (yol === '/') return listeGoster();
     if (yol === '/yeni') return formGoster(null);
     if ((m = yol.match(/^\/aday\/([\w-]+)\/duzenle$/))) return formGoster(m[1]);
@@ -736,6 +737,71 @@
       bildir('Kaydedilemedi: ' + hataMetni(err), 'hata');
       btn.disabled = false;
       btn.textContent = butonMetni;
+    }
+  }
+
+  // ---------- şifre değiştirme ----------
+
+  const MIN_SIFRE = 8;
+
+  function sifreGoster() {
+    yeniGorunum(`
+      <a href="#/" class="geri">← Aday listesi</a>
+      <h1>Şifre Değiştir</h1>
+      <p class="sayfa-alt">${esc(kullanici.email || '')} hesabının şifresini değiştiriyorsun.</p>
+      <form id="sifreFormu" class="kart form dar-form">
+        <label>Mevcut şifre<input type="password" name="mevcut" required autocomplete="current-password"></label>
+        <label>Yeni şifre<input type="password" name="yeni" required minlength="${MIN_SIFRE}" autocomplete="new-password"></label>
+        <label>Yeni şifre (tekrar)<input type="password" name="tekrar" required minlength="${MIN_SIFRE}" autocomplete="new-password"></label>
+        <p class="ipucu">En az ${MIN_SIFRE} karakter olmalı. Harf ve rakamı birlikte kullanman önerilir.</p>
+        <p class="hata" id="sifreHata" hidden></p>
+        <div class="butonlar">
+          <button type="submit" class="btn birincil">Şifreyi Değiştir</button>
+          <a href="#/" class="btn">Vazgeç</a>
+        </div>
+      </form>`);
+    const f = document.getElementById('sifreFormu');
+    f.mevcut.focus();
+    f.addEventListener('submit', sifreDegistir);
+  }
+
+  function sifreHataMetni(err) {
+    const m = (err && err.message) || '';
+    if (/different from the old/i.test(m)) return 'Yeni şifre, mevcut şifreyle aynı olamaz.';
+    if (/weak|at least|characters/i.test(m)) return 'Yeni şifre yeterince güçlü değil. Daha uzun bir şifre dene, harf ve rakam kullan.';
+    if (/reauthenticat|nonce/i.test(m)) return 'Güvenlik nedeniyle çıkış yapıp tekrar giriş yaptıktan sonra dene.';
+    return hataMetni(err);
+  }
+
+  async function sifreDegistir(e) {
+    e.preventDefault();
+    const f = e.target;
+    const hataKutu = document.getElementById('sifreHata');
+    const btn = f.querySelector('button[type="submit"]');
+    const hata = mesaj => { hataKutu.textContent = mesaj; hataKutu.hidden = false; };
+    hataKutu.hidden = true;
+
+    const mevcut = f.mevcut.value;
+    const yeni = f.yeni.value;
+    if (yeni.length < MIN_SIFRE) return hata(`Yeni şifre en az ${MIN_SIFRE} karakter olmalı.`);
+    if (yeni !== f.tekrar.value) return hata('Yeni şifreler birbiriyle aynı değil.');
+    if (yeni === mevcut) return hata('Yeni şifre, mevcut şifreyle aynı olamaz.');
+
+    btn.disabled = true;
+    try {
+      const giris = await sb.auth.signInWithPassword({ email: kullanici.email, password: mevcut });
+      if (giris.error) {
+        return hata(/invalid login credentials/i.test(giris.error.message || '') ? 'Mevcut şifre hatalı.' : hataMetni(giris.error));
+      }
+      const { error } = await sb.auth.updateUser({ password: yeni });
+      if (error) return hata(sifreHataMetni(error));
+      f.reset();
+      bildir('Şifren değiştirildi. Bir sonraki girişte yeni şifreni kullan.', 'basari');
+      location.hash = '#/';
+    } catch (err) {
+      hata(sifreHataMetni(err));
+    } finally {
+      btn.disabled = false;
     }
   }
 

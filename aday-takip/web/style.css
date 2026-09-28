@@ -126,6 +126,9 @@ input[type="file"] { padding: 8px; background: var(--panel-soft); }
 .menu a:hover { color: var(--ink); background: var(--panel-soft); }
 .menu a.aktif { color: var(--accent); background: var(--accent-soft); }
 .sayfa-alt { margin: 4px 0 0; color: var(--muted); }
+.btn.aktif { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-soft); }
+.dar-form { max-width: 440px; }
+.dar-ekran { display: none; }
 .ust-sag { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; min-width: 0; }
 #kullaniciEmail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 main { max-width: 1200px; margin: 0 auto; padding: 24px; }
@@ -301,12 +304,20 @@ legend { font-size: 13px; font-weight: 600; color: var(--ink-2); padding: 0 6px;
 .bildirim.tur-basari { background: #1c6b3a; }
 .bildirim.tur-hata { background: var(--danger); }
 
+@media (max-width: 420px) {
+  .logo { display: none; }
+}
+
 @media (max-width: 600px) {
   .ust { padding: 10px 16px; }
   .ust-sol { gap: 10px; }
   .logo { font-size: 15px; }
   .menu a { padding: 6px 8px; }
   #kullaniciEmail { display: none; }
+  .ust-sag { gap: 6px; }
+  .ust-sag .btn { padding: 7px 10px; }
+  .genis-ekran { display: none; }
+  .dar-ekran { display: inline; }
   .cubuk-satir { grid-template-columns: minmax(80px, 38%) 1fr; }
   main { padding: 16px; }
   .arac-cubugu select { flex: 1 1 40%; }
